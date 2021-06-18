@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { GetStaticProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -5,9 +6,9 @@ import Prismic from '@prismicio/client';
 
 import Info from '../components/Info';
 import { getPrismicClient } from '../services/prismic';
+import { formatDate } from '../shared/dates';
 import commonStyles from '../styles/common.module.scss';
 import styles from './home.module.scss';
-import { formatDate } from '../shared/dates';
 
 interface Post {
   uid?: string;
@@ -28,7 +29,36 @@ interface HomeProps {
   postsPagination: PostPagination;
 }
 
+function parseResult(result: any[]): Post[] {
+  return result.map(post => ({
+    uid: post.uid,
+    first_publication_date: post.first_publication_date,
+    data: {
+      ...post.data,
+    },
+  }));
+}
+
 export default function Home({ postsPagination }: HomeProps): JSX.Element {
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [posts, setPosts] = useState(postsPagination.results);
+  const [nextPage, setNextPage] = useState(postsPagination.next_page);
+
+  const handleLoadMorePosts = (): void => {
+    setLoadingMore(true);
+    fetch(nextPage)
+      .then(result => result.json())
+      .then(response => {
+        setPosts([...posts, ...parseResult(response.results)]);
+        setNextPage(response.next_page);
+        setLoadingMore(false);
+      })
+      .catch(error => {
+        setLoadingMore(false);
+        alert(`Error fetching more posts: ${error.message}`);
+      });
+  };
+
   return (
     <>
       <Head>
@@ -37,8 +67,8 @@ export default function Home({ postsPagination }: HomeProps): JSX.Element {
 
       <main className={commonStyles.container}>
         <div className={styles.posts}>
-          {postsPagination?.results.map(post => (
-            <Link href={`post/${post.uid}`} key={post.uid}>
+          {posts?.map(post => (
+            <Link href={`/post/${post.uid}`} key={post.uid}>
               <a>
                 <strong>{post.data.title}</strong>
                 <p>{post.data.subtitle}</p>
@@ -52,8 +82,14 @@ export default function Home({ postsPagination }: HomeProps): JSX.Element {
               </a>
             </Link>
           ))}
-          {postsPagination.next_page && (
-            <button type="button">Carregar mais posts</button>
+          {!!nextPage && (
+            <button
+              type="button"
+              disabled={loadingMore}
+              onClick={handleLoadMorePosts}
+            >
+              {loadingMore ? 'Carregando...' : 'Carregar mais posts'}
+            </button>
           )}
         </div>
       </main>
@@ -67,20 +103,14 @@ export const getStaticProps: GetStaticProps = async () => {
     Prismic.Predicates.at('document.type', 'posts'),
     {
       fetch: ['posts.title', 'posts.subtitle', 'posts.author'],
-      pageSize: 3,
+      pageSize: 1,
     }
   );
 
-  const posts: Post[] = postsResponse.results.map(post => ({
-    uid: post.uid,
-    first_publication_date: post.first_publication_date,
-    data: {
-      ...post.data,
-    },
-  }));
+  const posts: Post[] = parseResult(postsResponse.results);
 
   return {
-    revalidate: 60, // 60 segundos
+    revalidate: 60 * 60, // 1 hora
     props: {
       postsPagination: {
         results: posts,

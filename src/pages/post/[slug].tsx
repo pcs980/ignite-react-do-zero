@@ -1,10 +1,13 @@
 /* eslint-disable react/no-danger */
 import { GetStaticPaths, GetStaticProps } from 'next';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
+import Prismic from '@prismicio/client';
 import { RichText } from 'prismic-dom';
+import { FiLoader } from 'react-icons/fi';
+
 import Banner from '../../components/Banner';
 import Info from '../../components/Info';
-
 import { getPrismicClient } from '../../services/prismic';
 import { formatDate } from '../../shared/dates';
 
@@ -33,6 +36,19 @@ interface PostProps {
 }
 
 export default function Post({ post }: PostProps): JSX.Element {
+  const router = useRouter();
+
+  if (router.isFallback) {
+    return (
+      <>
+        <main className={styles.loading}>
+          <FiLoader />
+          <span>Carregando...</span>
+        </main>
+      </>
+    );
+  }
+
   const averageWordsPerMinute = Number(
     process.env.AVERAGE_WORDS_PER_MINUTE ?? 200
   );
@@ -79,12 +95,16 @@ export default function Post({ post }: PostProps): JSX.Element {
 }
 
 export const getStaticPaths: GetStaticPaths = async () => {
-  // const prismic = getPrismicClient();
-  // const posts = await prismic.query(TODO);
+  const prismic = getPrismicClient();
+  const posts = await prismic.query(
+    Prismic.Predicates.at('document.type', 'posts'),
+    { pageSize: 1 }
+  );
+  const paths = posts.results.map(p => ({ params: { slug: p.uid } }));
 
   return {
-    paths: [],
-    fallback: 'blocking',
+    paths,
+    fallback: true,
   };
 };
 
@@ -94,7 +114,8 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
   const prismic = getPrismicClient();
   const response = await prismic.getByUID('posts', slug as string, {});
 
-  const post: Post = {
+  const post = {
+    uid: response.uid,
     first_publication_date: response.first_publication_date,
     data: {
       ...response.data,
@@ -105,6 +126,7 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
     props: {
       post,
     },
+    revalidate: 60 * 60 * 6, // 6 horas
   };
 };
 

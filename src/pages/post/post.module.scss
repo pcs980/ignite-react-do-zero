@@ -35,3 +35,26 @@
   display: flex;
   flex-direction: row;
 }
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: auto;
+
+  svg {
+    animation: rotation 3s infinite linear;
+  }
+  span {
+    margin-left: 0.5rem;
+  }
+}
+
+@keyframes rotation {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(359deg);
+  }
+}
